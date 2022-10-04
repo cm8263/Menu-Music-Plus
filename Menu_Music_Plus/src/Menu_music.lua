@@ -40,6 +40,8 @@ local nextTrackSeason = nil
 local nextTrackName = nil
 local nextTrackIndex = nil
 local timeTilNextSong = 0
+local songPaused = false
+local lastSongWasRandom = false
 
 local NowPlaying = function()
   -- function num : 0_1 , upvalues : _ENV, mCurrentTrack, mController, UnloadTrack, mThreadNowPlaying
@@ -48,10 +50,10 @@ local NowPlaying = function()
   local uiInterrupted = false
   local bTrackStarted = false
   local nowPlayingUi = AgentFind("ui_menuMain_nowPlaying")
-  local textFormat = "^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^%s / %s\n^glyphScale:0.45^Menu Music Plus"
+  local textFormat = "^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^%s / %s%s\n^glyphScale:0.45^Menu Music Plus"
 
   Menu_Music_Plus_Get_Text = function()
-    return (string.format)(textFormat, Dialog_GetText("ui_music", "header_nowPlaying"), Dialog_GetText("ui_music", mCurrentTrack), Menu_Music_Plus_Seconds_To_Run_Time(time), Menu_Music_Plus_Seconds_To_Run_Time(totalTime))
+    return (string.format)(textFormat, Dialog_GetText("ui_music", "header_nowPlaying"), Dialog_GetText("ui_music", mCurrentTrack), Menu_Music_Plus_Seconds_To_Run_Time(time), Menu_Music_Plus_Seconds_To_Run_Time(totalTime), songPaused and " (Paused)" or "")
   end
 
   while mController and ControllerIsPlaying(mController) do
@@ -93,7 +95,9 @@ local NowPlaying = function()
   mCurrentTrack = nil
   mThreadNowPlaying = nil
 
-  if autoplayEnabled and nextTrackName then
+  if autoplayEnabled and (nextTrackName or lastSongWasRandom) then
+    if lastSongWasRandom then nextTrackSeason, nextTrackName, nextTrackIndex = Menu_Music_Plus_Pick_Random_Song() end
+
     timeTilNextSong = 5
 
     while timeTilNextSong > 0 and autoplayEnabled do
@@ -103,7 +107,7 @@ local NowPlaying = function()
       Sleep(1)
     end
 
-    if timeTilNextSong > -1 and autoplayEnabled then Menu_Music_Play(nextTrackSeason, nextTrackName, nextTrackIndex) end
+    if timeTilNextSong > -1 and autoplayEnabled then Menu_Music_Play(nextTrackSeason, nextTrackName, nextTrackIndex, lastSongWasRandom) end
   end
 
   Menu_Main_SetNowPlaying()
@@ -142,6 +146,9 @@ Menu_Music = function()
     Menu_Add(ListButtonLite, "season3", "label_season3", "Menu_MusicSeason( 3 )")
     Menu_Add(ListButtonLite, "season4", "label_season4", "Menu_MusicSeason( 4 )")
     Menu_Add(ListButtonLite, "menuMusicPlusSpacer", "")
+    Menu_Add(ListButtonLite, "menuMusicPlusRandomSong", "Play Random Song", "Menu_Music_Plus_Play_Random_Song()")
+    Menu_Add(ListButtonLite, "menuMusicPlusPlayPauseSong", "Pause / Play Current Song", "Menu_Music_Plus_Play_Pause_Song()")
+    Menu_Add(ListButtonLite, "menuMusicPlusStopSong", "Stop Song", "Menu_Music_Plus_Stop_Song()")
     Menu_Add(ListButtonLite, "menuMusicPlusToggleAutoplay", "Toggle Autoplay", "Menu_Music_Plus_Toggle_Autoplay()")
     local legendWidget = Menu_Add(Legend)
     legendWidget.Place = function(self)
@@ -177,7 +184,7 @@ Menu_MusicSeason = function(season)
       if text == "" then
         text = track
       end
-      Menu_Add(ListButtonLite, (string.format)("season%s_track%02d", self.season, i), text, (string.format)("Menu_Music_Play( \"%s\", \"%s\", \"%s\" )", season, track, i))
+      Menu_Add(ListButtonLite, (string.format)("season%s_track%02d", self.season, i), text, (string.format)("Menu_Music_Play( \"%s\", \"%s\", \"%s\" )", season, track, i, false))
     end
     local legendWidget = Menu_Add(Legend)
     legendWidget.Place = function(self)
@@ -198,11 +205,15 @@ Menu_MusicSeason = function(season)
   Menu_Push(menu)
 end
 
-Menu_Music_Play = function(trackSeason, trackName, trackIndex)
+Menu_Music_Play = function(trackSeason, trackName, trackIndex, wasRandom)
   -- function num : 0_4 , upvalues : _ENV, mController, mThreadNowPlaying, UnloadTrack, mCurrentTrack, NowPlaying
   WidgetInputHandler_EnableInput(false)
 
+  lastSongWasRandom = wasRandom
+
   Menu_Music_Plus_Cancel_Next_Song()
+
+  if songPaused then songPaused = false end
   
   if mController and ControllerIsPlaying(mController) then
     ThreadKill(mThreadNowPlaying)
@@ -294,4 +305,31 @@ end
 
 Menu_Music_Plus_Cancel_Next_Song = function()
   if timeTilNextSong > 0 then timeTilNextSong = -2 end
+end
+
+Menu_Music_Plus_Pick_Random_Song = function()
+  local randomSeasonNumber = math.random(#kSeasonTracks)
+  local randomSeason = kSeasonTracks[randomSeasonNumber]
+  local randomTrackIndex = math.random(#randomSeason)
+  local randomTrackName = randomSeason[randomTrackIndex]
+
+  return randomSeasonNumber, randomTrackName, randomTrackIndex
+end
+
+Menu_Music_Plus_Play_Random_Song = function()
+  randomSeasonNumber, randomTrackName, randomTrackIndex = Menu_Music_Plus_Pick_Random_Song()
+  
+  Menu_Music_Play(randomSeasonNumber, randomTrackName, randomTrackIndex, true)
+end
+
+Menu_Music_Plus_Play_Pause_Song = function()
+  if not mController or not ControllerIsPlaying(mController) then return end
+
+  songPaused = not songPaused
+
+  Menu_Music_Pause(songPaused)
+end
+
+Menu_Music_Plus_Stop_Song = function()
+  if mController and ControllerIsPlaying(mController) then Menu_Music_Play(nil, mCurrentTrack, nil, false) end
 end
