@@ -18,9 +18,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 --]]
 
--- Menu Music Plus Requires
-
-
 local kSeasonTracks = {}
 kSeasonTracks[1] = {"mus_101_clementineSuite", "mus_101_everettsPrescriptions", "mus_101_familyTies", "mus_101_fathersAndSons", "mus_101_hershelsFarm", "mus_101_lightsOut", "mus_101_terrorMysterious", "mus_101_twistOfFate", "mus_102_bitterRevenge", "mus_102_division", "mus_102_skeletonsInTheCloset", "mus_102_stJohnsDairy", "mus_103_aTraitorWithin", "mus_103_longRoadAhead", "mus_103_motherAndSon", "mus_103_railsAndWretches", "mus_103_safetyInspections", "mus_103_theBanditsRaid", "mus_103_trainingClementine", "mus_104_darkRooms", "mus_104_insideCrawford", "mus_104_refractions", "mus_104_riverStreetAboveAndBelow", "mus_105_mansionSiege", "mus_105_noTimeLeft", "mus_105_passages", "mus_105_saveYourself", "mus_105_theGauntlet", "mus_105_theManOnTheRadio", "mus_105_whatAView", "mus_106_boyd", "mus_106_escapeInTheCar", "mus_106_flashlights", "mus_106_foggyNight", "mus_106_goFish", "mus_106_hidingInTheCorn", "mus_106_keysAndAGun", "mus_106_prisonBus", "mus_106_roshambo", "mus_106_stephaniesCrimes"}
 kSeasonTracks[2] = {"mus_201_allThatRemains", "mus_201_beginningAgain", "mus_201_boundForGlory", "mus_201_findingFood", "mus_201_myNameIsClementine", "mus_201_scavengingSurvival", "mus_201_solitude", "mus_201_theValleyOfTheShadow", "mus_201_truckStop", "mus_201_wandering", "mus_202_carver", "mus_202_moonstarLodge", "mus_202_sarahsSong", "mus_202_snoopingStranger", "mus_202_standoff", "mus_203_carversCompound", "mus_203_carversCruelty", "mus_203_escapePlans", "mus_203_kennysRage", "mus_204_stayOrGo", "mus_205_autoRepair", "mus_205_clemAwake", "mus_205_departure", "mus_205_fireside", "mus_205_freezing", "mus_205_jane", "mus_205_janeWorries", "mus_205_snowbound", "mus_205_theEndOfItAll", "mus_205_wellington"}
@@ -39,18 +36,23 @@ end
 local NowPlaying = function()
   -- function num : 0_1 , upvalues : _ENV, mCurrentTrack, mController, UnloadTrack, mThreadNowPlaying
   local time = 0
+  local totalTime = 0
   local bTrackStarted = false
   local nowPlayingUi = AgentFind("ui_menuMain_nowPlaying")
-  local textFormat = "^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^%s\n^glyphScale:0.45^Menu Music Plus"
-  local text = (string.format)(textFormat, Dialog_GetText("ui_music", "header_nowPlaying"), Dialog_GetText("ui_music", mCurrentTrack), Menu_Music_Plus_Seconds_To_Run_Time(time))
-  
-  Menu_Main_SetNowPlaying(text)
+  local textFormat = "^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^%s / %s\n^glyphScale:0.45^Menu Music Plus"
+
+  Menu_Music_Plus_Get_Text = function()
+    return (string.format)(textFormat, Dialog_GetText("ui_music", "header_nowPlaying"), Dialog_GetText("ui_music", mCurrentTrack), Menu_Music_Plus_Seconds_To_Run_Time(time), Menu_Music_Plus_Seconds_To_Run_Time(totalTime))
+  end
 
   while mController and ControllerIsPlaying(mController) do
     WaitForNextFrame()
     time = SoundGetRawTime(mController)
     if not bTrackStarted and time > 0 then
       bTrackStarted = true
+      totalTime = ControllerGetLength(mController)
+
+      Menu_Main_SetNowPlaying(Menu_Music_Plus_Get_Text())
     end
 
     if bTrackStarted and time == 0 then
@@ -60,11 +62,10 @@ local NowPlaying = function()
     time = math.ceil(time)
 
     if time > 0 then
-      text = (string.format)(textFormat, Dialog_GetText("ui_music", "header_nowPlaying"), Dialog_GetText("ui_music", mCurrentTrack), Menu_Music_Plus_Seconds_To_Run_Time(time))
-      AgentSetProperty(nowPlayingUi, kText, text)
-    end
+      AgentSetProperty(nowPlayingUi, kText, Menu_Music_Plus_Get_Text())
 
-    Sleep(1)
+      Sleep(1)
+    end
   end
 
   Menu_Main_SetNowPlaying()
