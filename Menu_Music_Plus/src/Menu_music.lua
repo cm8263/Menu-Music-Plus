@@ -33,10 +33,19 @@ local UnloadTrack = function()
   SoundUnload(FileSetExtension(mCurrentTrack, "ogg"))
 end
 
+-- Menu Music Plus Variables
+local autoplayEnabled = true
+local togglingAutoplay = false
+local nextTrackSeason = nil
+local nextTrackName = nil
+local nextTrackIndex = nil
+local timeTilNextSong = 0
+
 local NowPlaying = function()
   -- function num : 0_1 , upvalues : _ENV, mCurrentTrack, mController, UnloadTrack, mThreadNowPlaying
   local time = 0
   local totalTime = 0
+  local uiInterrupted = false
   local bTrackStarted = false
   local nowPlayingUi = AgentFind("ui_menuMain_nowPlaying")
   local textFormat = "^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^%s / %s\n^glyphScale:0.45^Menu Music Plus"
@@ -61,19 +70,43 @@ local NowPlaying = function()
 
     time = math.ceil(time)
 
-    if time > 0 then
-      AgentSetProperty(nowPlayingUi, kText, Menu_Music_Plus_Get_Text())
+    if time > 0 and time < totalTime then
+      if togglingAutoplay then
+        if not uiInterrupted then uiInterrupted = true end
+      else
+        if uiInterrupted then
+          Menu_Main_SetNowPlaying(Menu_Music_Plus_Get_Text())
 
-      Sleep(1)
+          uiInterrupted = false
+        else
+          AgentSetProperty(nowPlayingUi, kText, Menu_Music_Plus_Get_Text())
+        end
+
+        Sleep(1)
+      end
     end
   end
 
-  Menu_Main_SetNowPlaying()
   Menu_Main_EnableAmbient(true)
   UnloadTrack()
   mController = nil
   mCurrentTrack = nil
   mThreadNowPlaying = nil
+
+  if autoplayEnabled and nextTrackName then
+    timeTilNextSong = 5
+
+    while timeTilNextSong > 0 and autoplayEnabled do
+      AgentSetProperty(nowPlayingUi, kText, (string.format)("^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^Playing in %s\n^glyphScale:0.45^Menu Music Plus", "Up Next:", Dialog_GetText("ui_music", nextTrackName), timeTilNextSong))
+      timeTilNextSong = timeTilNextSong - 1
+
+      Sleep(1)
+    end
+
+    if timeTilNextSong > -1 and autoplayEnabled then Menu_Music_Play(nextTrackSeason, nextTrackName, nextTrackIndex) end
+  end
+
+  Menu_Main_SetNowPlaying()
 end
 
 Menu_Music = function()
@@ -108,6 +141,8 @@ Menu_Music = function()
     Menu_Add(ListButtonLite, "seasonM", "label_seasonM", "Menu_MusicSeason( \"M\" )")
     Menu_Add(ListButtonLite, "season3", "label_season3", "Menu_MusicSeason( 3 )")
     Menu_Add(ListButtonLite, "season4", "label_season4", "Menu_MusicSeason( 4 )")
+    Menu_Add(ListButtonLite, "menuMusicPlusSpacer", "")
+    Menu_Add(ListButtonLite, "menuMusicPlusToggleAutoplay", "Toggle Autoplay", "Menu_Music_Plus_Toggle_Autoplay()")
     local legendWidget = Menu_Add(Legend)
     legendWidget.Place = function(self)
       -- function num : 0_2_2_0 , upvalues : menu
@@ -137,12 +172,12 @@ Menu_MusicSeason = function(season)
   menu.Populate = function(self)
     -- function num : 0_3_0 , upvalues : _ENV, kSeasonTracks, season, menu
     Menu_Add(Header, nil, "header_musicSeason" .. self.season)
-    for i,track in ipairs(kSeasonTracks[season]) do
+    for i, track in ipairs(kSeasonTracks[season]) do
       local text = Dialog_GetText("ui_music", track)
       if text == "" then
         text = track
       end
-      Menu_Add(ListButtonLite, (string.format)("season%s_track%02d", self.season, i), text, (string.format)("Menu_Music_Play( \"%s\" )", track))
+      Menu_Add(ListButtonLite, (string.format)("season%s_track%02d", self.season, i), text, (string.format)("Menu_Music_Play( \"%s\", \"%s\", \"%s\" )", season, track, i))
     end
     local legendWidget = Menu_Add(Legend)
     legendWidget.Place = function(self)
@@ -163,9 +198,12 @@ Menu_MusicSeason = function(season)
   Menu_Push(menu)
 end
 
-Menu_Music_Play = function(trackName)
+Menu_Music_Play = function(trackSeason, trackName, trackIndex)
   -- function num : 0_4 , upvalues : _ENV, mController, mThreadNowPlaying, UnloadTrack, mCurrentTrack, NowPlaying
   WidgetInputHandler_EnableInput(false)
+
+  Menu_Music_Plus_Cancel_Next_Song()
+  
   if mController and ControllerIsPlaying(mController) then
     ThreadKill(mThreadNowPlaying)
     mThreadNowPlaying = nil
@@ -190,6 +228,9 @@ Menu_Music_Play = function(trackName)
     Menu_Main_EnableAmbient(false)
     mCurrentTrack = trackName
     mThreadNowPlaying = ThreadStart(NowPlaying)
+    nextTrackSeason = tonumber(trackSeason)
+    nextTrackIndex = tonumber(trackIndex) + 1
+    nextTrackName = kSeasonTracks[nextTrackSeason][nextTrackIndex]
     WaitForNextFrame()
   end
   WidgetInputHandler_EnableInput(true)
@@ -232,4 +273,25 @@ Menu_Music_Plus_Seconds_To_Run_Time = function(seconds)
   if secs < 10 then secs = "0" .. secs end
 
   return mins .. ":" .. secs
+end
+
+Menu_Music_Plus_Toggle_Autoplay = function()
+  if togglingAutoplay then return end
+
+  Menu_Music_Plus_Cancel_Next_Song()
+
+  togglingAutoplay = true
+  autoplayEnabled = not autoplayEnabled
+  
+  Menu_Main_SetNowPlaying((string.format)("Autoplay %s\n^glyphScale:0.45^Menu Music Plus", autoplayEnabled and "Enabled" or "Disabled"))
+
+  Sleep(2)
+
+  if not mController and not ControllerIsPlaying(mController) then Menu_Main_SetNowPlaying() end
+
+  togglingAutoplay = false
+end
+
+Menu_Music_Plus_Cancel_Next_Song = function()
+  if timeTilNextSong > 0 then timeTilNextSong = -2 end
 end
