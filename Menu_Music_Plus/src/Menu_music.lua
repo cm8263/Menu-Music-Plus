@@ -100,8 +100,18 @@ local NowPlaying = function()
 
     timeTilNextSong = 5
 
+    Menu_Main_SetNowPlaying()
+
+    Sleep(1.5)
+
+    Menu_Music_Plus_Get_Up_Next_Text = function()
+      return (string.format)("^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^Playing in %s\n^glyphScale:0.45^Menu Music Plus", "UP NEXT:", Dialog_GetText("ui_music", nextTrackName), timeTilNextSong)
+    end
+
+    Menu_Main_SetNowPlaying(Menu_Music_Plus_Get_Up_Next_Text())
+
     while timeTilNextSong > 0 and autoplayEnabled do
-      AgentSetProperty(nowPlayingUi, kText, (string.format)("^glyphScale:0.75^%s\n^^%s\n^glyphScale:0.6^Playing in %s\n^glyphScale:0.45^Menu Music Plus", "Up Next:", Dialog_GetText("ui_music", nextTrackName), timeTilNextSong))
+      AgentSetProperty(nowPlayingUi, kText, Menu_Music_Plus_Get_Up_Next_Text())
       timeTilNextSong = timeTilNextSong - 1
 
       Sleep(1)
